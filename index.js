@@ -10,14 +10,30 @@ Ability.addAlias("PATCH", "update");
 Ability.addAlias("DELETE", "delete");
 
 const { permittedFieldsOf } = require("@casl/ability/extra");
+// Retrieves the values from the 1st object argument based on the keys provided on the 2nd string array argument
 const pick = require("lodash/pick");
 
 class CASL {
+  assetClasses = {};
+
   constructor(mongoose, assets, denyByDefault = false) {
     this.denyByDefault = denyByDefault;
 
     assets.forEach(({ name, actions }) => {
+      // Define class with dynamic name for casl checking
+      this.assetClasses[name] = class {
+        static get modelName() {
+          return name;
+        }
+
+        constructor(obj) {
+          Object.assign(this, obj);
+        }
+      };
+
+      // For each action (GET, POST etc.)
       Object.keys(actions).map(action => {
+        // For each user described in action (writer, admin etc.)
         Object.keys(actions[action]).forEach(user => {
           if (
             actions[action][user] === null ||
@@ -26,23 +42,22 @@ class CASL {
           )
             throw new Error("Invalid user rights provided");
 
-          //   const rule = {action,name};
           const rule = {};
-          // If true, all variables below will be undefined
+
+          // If the value is true, the destructuring will result in undefined values for $if & $fields ensuring no type of rule checking
           const { $if, $fields } = actions[action][user];
 
           if (Array.isArray($fields)) rule.$fields = $fields;
+
           if ($if !== null && typeof $if === "object") {
-            const $dynamicFields = Object.keys($if).filter(
-              key => key[0] === "$"
-            );
-            rule.$if = { $dynamicFields, ...$if };
+            rule.$if = $if;
           }
 
           actions[action][user] = rule;
         });
       });
 
+      // We also need $allFields to ensure that if no rules are specified, all fields are to be retrieved
       this[name] = {
         ...actions,
         $allFields: Object.keys(mongoose[name].paths)
@@ -52,72 +67,133 @@ class CASL {
 
   sanitizeOutput(userField = "type", path = undefined, asset = undefined) {
     return async (r, _, payload) => {
-      const allowedFields = await this.getAllowedFields(r, userField, asset);
+      const {
+        raw: { url }
+      } = r;
 
-      if (path !== undefined) payload = this.getNestedValue(payload, path);
+      if (!asset)
+        asset = url[1].toUpperCase() + url.substring(2, url.indexOf("/", 1));
 
-      return Array.isArray(payload)
-        ? payload.map(member => pick(member, allowedFields))
-        : pick(payload, allowedFields);
+      const assetClass = this.assetClasses[asset];
+
+      let assetField;
+
+      if (path !== undefined) assetField = this.getNestedValue(payload, path);
+      else assetField = { ...payload };
+
+      if (Array.isArray(assetField)) {
+        assetField = assetField.map(async member => {
+          const allowedFields = await this.getAllowedFields(
+            r,
+            userField,
+            new assetClass(member)
+          );
+          return pick(member, allowedFields);
+        });
+        return (await Promise.all(assetField)).filter(
+          obj => Object.entries(obj).length !== 0
+        );
+      } else {
+        const allowedFields = await this.getAllowedFields(
+          r,
+          userField,
+          new assetClass(assetField)
+        );
+
+        console.log(allowedFields);
+
+        console.log(pick(assetField, allowedFields));
+
+        return pick(assetField, allowedFields);
+      }
     };
   }
 
   guardPath(userField = "type", asset = undefined) {
     return async r => {
-      const allowedFields = await this.getAllowedFields(r, userField, asset);
+      const {
+        raw: { url }
+      } = r;
 
-      if (typeof r.body === "object") r.body = pick(r.body, allowedFields);
+      if (!asset)
+        asset = url[1].toUpperCase() + url.substring(2, url.indexOf("/", 1));
+
+      if (typeof r.body === "object") {
+        const allowedFields = await this.getAllowedFields(
+          r,
+          userField,
+          new this.assetClasses[asset](r.body)
+        );
+        r.body = pick(r.body, allowedFields);
+      }
     };
   }
 
   async getAllowedFields(r, userField, asset) {
-    console.log(r.jwtVerify);
-    const { raw, jwtVerify } = r;
-    console.log(raw);
-    // const {
-    //   raw: { url, method },
-    //   jwtVerify
-    // } = r;
+    const {
+      raw: { method }
+    } = r;
 
-    if (!asset)
-      asset = url[0].toUpperCase() + url.substring(1, url.indexOf(1, "/"));
+    const user = await r.jwtVerify();
 
-    const user = await jwtVerify();
+    const assetName =
+      typeof asset === "string" ? asset : asset.constructor.modelName;
 
-    const ability = this.createAbilities(asset, method, user[userField], user);
+    const ability = this.createAbilities(
+      assetName,
+      method,
+      this.getNestedValue(user, userField),
+      user
+    );
 
-    const allAssetFields = this[asset].$allFields;
+    const allAssetFields = this[assetName].$allFields;
 
     return permittedFieldsOf(ability, method, asset, {
       fieldsFrom: rule => rule.fields || allAssetFields
     });
   }
 
+  constructRule(action, asset, $fields, $if, userInfo) {
+    const rule = [action, asset];
+
+    if (Array.isArray($fields) && typeof $fields[0] === "string")
+      rule.push($fields);
+
+    $if = { ...$if };
+
+    if ($if) {
+      Object.keys($if).forEach(key => {
+        if (key[0] === "$") {
+          $if[key.substring(1)] = this.getNestedValue(userInfo, $if[key]);
+          delete $if[key];
+        }
+      });
+
+      rule.push($if);
+    }
+
+    return rule;
+  }
+
   createAbilities(asset, action, userType, userInfo) {
     return AbilityBuilder.define(can => {
       if (this[asset][action] && this[asset][action][userType]) {
         let { $if, $fields } = this[asset][action][userType];
-        const rule = [action, asset];
-
-        if ($fields) rule.push($fields);
-
-        $if = { ...$if };
-
-        if ($if) {
-          if ($if.$dynamicFields) {
-            $if.$dynamicFields.forEach(
-              field => ($if[field] = getNestedValue(userInfo, $if[field]))
+        if (Array.isArray($if)) {
+          $if.forEach(($fi, i) => {
+            can(
+              ...this.constructRule(action, asset, $fields[i], $fi, userInfo)
             );
-            delete $if.$dynamicFields;
-          }
-
-          rule.push($if);
+          });
+        } else {
+          can(...this.constructRule(action, asset, $fields, $if, userInfo));
         }
-
-        can(...rule);
       } else {
         if (this.denyByDefault) throw new Error("Insufficient Privileges");
-        can("crud", "all");
+        can("POST", "all");
+        can("GET", "all");
+        can("PATCH", "all");
+        can("DELETE", "all");
       }
     });
   }

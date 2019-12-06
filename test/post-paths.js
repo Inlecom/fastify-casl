@@ -13,6 +13,14 @@ const routes = async fastify => {
       content: "Content of post no. 2",
       author: "Jane Doe",
       comments: ["Lorem", "Ipsum"]
+    },
+    {
+      _id: 3,
+      title: "Bar Foo",
+      summary: "Summary of post no. 3",
+      content: "Content of post no. 3",
+      author: "John Doe",
+      comments: ["Lorem", "Ipsum"]
     }
   ];
 

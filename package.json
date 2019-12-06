@@ -30,6 +30,6 @@
   "devDependencies": {
     "fastify": "^2.10.0",
     "fastify-jwt": "^1.2.0",
-    "tap": "^14.9.2"
+    "tap": "14.9.1"
   }
 }
