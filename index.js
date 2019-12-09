@@ -72,8 +72,11 @@ class CASL {
         raw: { url }
       } = r;
 
-      if (!asset)
-        asset = url[1].toUpperCase() + url.substring(2, url.indexOf("/", 1));
+      if (!asset) {
+        const end =
+          url.indexOf("/", 1) === -1 ? url.length : url.indexOf("/", 1);
+        asset = url[1].toUpperCase() + url.substring(2, end);
+      }
 
       const assetClass = this.assetClasses[asset];
 
@@ -124,8 +127,11 @@ class CASL {
         raw: { url }
       } = r;
 
-      if (!asset)
-        asset = url[1].toUpperCase() + url.substring(2, url.indexOf("/", 1));
+      if (!asset) {
+        const end =
+          url.indexOf("/", 1) === -1 ? url.length : url.indexOf("/", 1);
+        asset = url[1].toUpperCase() + url.substring(2, end);
+      }
 
       const allowedFields = await this.getAllowedFields(
         r,
@@ -186,8 +192,12 @@ class CASL {
 
   createAbilities(asset, action, userType, userInfo) {
     return AbilityBuilder.define(can => {
-      if (this[asset][action] && this[asset][action][userType]) {
-        let { $if, $fields } = this[asset][action][userType];
+      if (
+        this[asset][action] &&
+        (this[asset][action][userType] || this[asset][action].$default)
+      ) {
+        let { $if, $fields } =
+          this[asset][action][userType] || this[asset][action].$default;
         if (Array.isArray($if)) {
           $if.forEach(($fi, i) => {
             can(

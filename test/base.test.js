@@ -844,6 +844,76 @@ t.test(
 );
 
 t.test(
+  "should properly support the $default permissions for unspecified roles",
+  async test => {
+    test.plan(4);
+
+    const simpleRule = [
+      {
+        name: "Post",
+        actions: {
+          GET: {
+            $default: {
+              $fields: ["title", "author", "content"]
+            }
+          }
+        }
+      }
+    ];
+
+    fastify.register(fastifyCASL, parent => ({
+      mongooseSchemas: parent.mongoose,
+      assets: simpleRule,
+      denyByDefault: true
+    }));
+
+    // Sample CRUD RESTful paths for a mock /post endpoint
+    fastify.register(postPaths, {
+      prefix: "/post"
+    });
+
+    let payload, statusCode;
+
+    try {
+      await fastify.ready();
+      test.ok(fastify.casl);
+      test.ok(fastify.casl.constructor.name === "CASL");
+
+      ({ payload } = await fastify.inject({
+        method: "GET",
+        url: "/token/writer"
+      }));
+
+      const { token } = JSON.parse(payload);
+
+      ({ statusCode, payload } = await fastify.inject({
+        method: "GET",
+        url: "/post",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }));
+
+      test.equal(statusCode, 200);
+      test.deepEqual(JSON.parse(payload), [
+        {
+          title: "Foo Bar",
+          author: "Jane Doe",
+          content: "Content of post no. 2"
+        },
+        {
+          title: "Bar Foo",
+          author: "John Doe",
+          content: "Content of post no. 3"
+        }
+      ]);
+    } catch (e) {
+      test.fail("Fastify threw", e);
+    }
+  }
+);
+
+t.test(
   "should properly sanitize explicitly specified asset types",
   async test => {
     test.plan(4);

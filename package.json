@@ -1,6 +1,6 @@
 {
   "name": "fastify-casl",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A plugin to enforce ACL rules on fastify paths",
   "main": "index.js",
   "scripts": {
