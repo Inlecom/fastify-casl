@@ -636,7 +636,7 @@ t.test(
 );
 
 t.test(
-  "should properly sanitize output for authorized members in nested property of return structure",
+  "should properly sanitize output for authorized members in nested property of return structure (object)",
   async test => {
     test.plan(4);
 
@@ -691,9 +691,88 @@ t.test(
 
       test.equal(statusCode, 200);
       test.deepEqual(JSON.parse(payload), {
-        title: "Test",
-        author: "Jane Doe",
-        content: "Content of post no. 2"
+        message: "Updated Successfully",
+        post: {
+          nested: {
+            title: "Test",
+            author: "Jane Doe",
+            content: "Content of post no. 2"
+          }
+        }
+      });
+    } catch (e) {
+      test.fail("Fastify threw", e);
+    }
+  }
+);
+
+t.test(
+  "should properly sanitize output for authorized members in nested property of return structure (array)",
+  async test => {
+    test.plan(4);
+
+    const simpleRule = [
+      {
+        name: "Post",
+        actions: {
+          GET: {
+            writer: {
+              $fields: ["title", "author", "content"]
+            }
+          }
+        }
+      }
+    ];
+
+    fastify.register(fastifyCASL, parent => ({
+      mongooseSchemas: parent.mongoose,
+      assets: simpleRule,
+      denyByDefault: true
+    }));
+
+    // Sample CRUD RESTful paths for a mock /post endpoint
+    fastify.register(postPaths, {
+      prefix: "/post"
+    });
+
+    let payload, statusCode;
+
+    try {
+      await fastify.ready();
+      test.ok(fastify.casl);
+      test.ok(fastify.casl.constructor.name === "CASL");
+
+      ({ payload } = await fastify.inject({
+        method: "GET",
+        url: "/token/writer"
+      }));
+
+      const { token } = JSON.parse(payload);
+
+      ({ statusCode, payload } = await fastify.inject({
+        method: "GET",
+        url: "/post/nested",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }));
+
+      test.equal(statusCode, 200);
+      test.deepEqual(JSON.parse(payload), {
+        posts: {
+          nested: [
+            {
+              title: "Foo Bar",
+              author: "Jane Doe",
+              content: "Content of post no. 2"
+            },
+            {
+              title: "Bar Foo",
+              author: "John Doe",
+              content: "Content of post no. 3"
+            }
+          ]
+        }
       });
     } catch (e) {
       test.fail("Fastify threw", e);
@@ -712,8 +791,7 @@ t.test(
         actions: {
           GET: {
             writer: {
-              $fields: ["title", "author", "content"],
-              $if: {}
+              $fields: ["title", "author", "content"]
             }
           }
         }
@@ -756,8 +834,8 @@ t.test(
       test.equal(statusCode, 200);
       test.deepEqual(JSON.parse(payload), {
         title: "Bar Foo",
-        author: "Jane Doe",
-        content: "Content of post no. 2"
+        author: "John Doe",
+        content: "Content of post no. 3"
       });
     } catch (e) {
       test.fail("Fastify threw", e);
@@ -765,35 +843,230 @@ t.test(
   }
 );
 
+t.test(
+  "should properly sanitize explicitly specified asset types",
+  async test => {
+    test.plan(4);
+
+    const simpleRule = [
+      {
+        name: "DeleteResponse",
+        actions: {
+          DELETE: {
+            writer: {
+              writer: {
+                $fields: ["message"]
+              }
+            }
+          }
+        }
+      }
+    ];
+
+    fastify.register(fastifyCASL, parent => ({
+      mongooseSchemas: parent.mongoose,
+      assets: simpleRule,
+      denyByDefault: true
+    }));
+
+    // Sample CRUD RESTful paths for a mock /post endpoint
+    fastify.register(postPaths, {
+      prefix: "/post"
+    });
+
+    let payload, statusCode;
+
+    try {
+      await fastify.ready();
+      test.ok(fastify.casl);
+      test.ok(fastify.casl.constructor.name === "CASL");
+
+      ({ payload } = await fastify.inject({
+        method: "GET",
+        url: "/token/writer"
+      }));
+
+      const { token } = JSON.parse(payload);
+
+      ({ statusCode, payload } = await fastify.inject({
+        method: "DELETE",
+        url: "/post/3",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }));
+
+      test.equal(statusCode, 200);
+      test.deepEqual(JSON.parse(payload), {
+        message: "Successfully deleted post"
+      });
+    } catch (e) {
+      test.fail("Fastify threw", e);
+    }
+  }
+);
+
+t.test(
+  "should properly throw if invalid nested path for return body is provided w/ verbosity",
+  async test => {
+    test.plan(4);
+
+    const simpleRule = [
+      {
+        name: "Post",
+        actions: {
+          GET: {
+            writer: {
+              $fields: ["title", "author", "content"]
+            }
+          }
+        }
+      }
+    ];
+
+    fastify.register(fastifyCASL, parent => ({
+      mongooseSchemas: parent.mongoose,
+      assets: simpleRule,
+      denyByDefault: true,
+      verbose: true
+    }));
+
+    // Sample CRUD RESTful paths for a mock /post endpoint
+    fastify.register(postPaths, {
+      prefix: "/post"
+    });
+
+    let payload, statusCode;
+
+    try {
+      await fastify.ready();
+      test.ok(fastify.casl);
+      test.ok(fastify.casl.constructor.name === "CASL");
+
+      ({ payload } = await fastify.inject({
+        method: "GET",
+        url: "/token/writer"
+      }));
+
+      const { token } = JSON.parse(payload);
+
+      ({ statusCode, payload } = await fastify.inject({
+        method: "GET",
+        url: "/post/throw",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }));
+
+      test.equal(statusCode, 500);
+      test.deepEqual(JSON.parse(payload), {
+        statusCode: 500,
+        error: "Internal Server Error",
+        message: 'Inexistent nested value for path "posts.nested.inner"'
+      });
+    } catch (e) {
+      console.log(e);
+      test.fail("Fastify threw", e);
+    }
+  }
+);
+
+t.test(
+  "should properly throw if invalid nested path for return body is provided w/o verbosity",
+  async test => {
+    test.plan(4);
+
+    const simpleRule = [
+      {
+        name: "Post",
+        actions: {
+          GET: {
+            writer: {
+              $fields: ["title", "author", "content"]
+            }
+          }
+        }
+      }
+    ];
+
+    fastify.register(fastifyCASL, parent => ({
+      mongooseSchemas: parent.mongoose,
+      assets: simpleRule,
+      denyByDefault: true
+    }));
+
+    // Sample CRUD RESTful paths for a mock /post endpoint
+    fastify.register(postPaths, {
+      prefix: "/post"
+    });
+
+    let payload, statusCode;
+
+    try {
+      await fastify.ready();
+      test.ok(fastify.casl);
+      test.ok(fastify.casl.constructor.name === "CASL");
+
+      ({ payload } = await fastify.inject({
+        method: "GET",
+        url: "/token/writer"
+      }));
+
+      const { token } = JSON.parse(payload);
+
+      ({ statusCode, payload } = await fastify.inject({
+        method: "GET",
+        url: "/post/throw",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }));
+
+      test.equal(statusCode, 500);
+      test.deepEqual(JSON.parse(payload), {
+        statusCode: 500,
+        error: "Internal Server Error",
+        message: "Fatal Error"
+      });
+    } catch (e) {
+      console.log(e);
+      test.fail("Fastify threw", e);
+    }
+  }
+);
+
+t.test(
+  "should properly throw if invalid configuration is provided",
+  async test => {
+    test.plan(2);
+
+    const simpleRule = [
+      {
+        name: "Post",
+        actions: {
+          GET: {
+            writer: 7
+          }
+        }
+      }
+    ];
+
+    fastify.register(fastifyCASL, parent => ({
+      mongooseSchemas: parent.mongoose,
+      assets: simpleRule,
+      denyByDefault: true
+    }));
+
+    try {
+      await fastify.ready();
+      test.fail("Fastify didn't throw");
+    } catch (e) {
+      test.ok(e);
+      test.equal(e.message, "Invalid user rights provided");
+    }
+  }
+);
+
 t.end();
 
 t.tearDown(() => fastify.close());
-
-// const testEmail = `${(+new Date()).toString(36).slice(-5)}@example.com`;
-
-// let { statusCode, payload } = await fastify.inject({
-//   method: "POST",
-//   url: "/",
-//   payload: {
-//     username: "test",
-//     password: "pass",
-//     email: testEmail
-//   }
-// });
-
-// const { username, password, email, _id } = JSON.parse(payload);
-// test.strictEqual(statusCode, 200);
-// test.strictEqual(username, "test");
-// test.strictEqual(password, undefined);
-// test.strictEqual(email, testEmail);
-
-// ({ statusCode, payload } = await fastify.inject({
-//   method: "PATCH",
-//   url: "/",
-//   payload: { author: _id, title: "Hello World", content: "foo bar" }
-// }));
-
-// const { title, content, author } = JSON.parse(payload);
-// test.strictEqual(title, "Hello World");
-// test.strictEqual(content, "foo bar");
-// test.strictEqual(author, _id);

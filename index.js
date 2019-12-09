@@ -16,8 +16,9 @@ const pick = require("lodash/pick");
 class CASL {
   assetClasses = {};
 
-  constructor(mongoose, assets, denyByDefault = false) {
+  constructor(mongoose, assets, denyByDefault, verbose) {
     this.denyByDefault = denyByDefault;
+    this.verbose = verbose;
 
     assets.forEach(({ name, actions }) => {
       // Define class with dynamic name for casl checking
@@ -79,6 +80,7 @@ class CASL {
       let assetField;
 
       if (path !== undefined) assetField = this.getNestedValue(payload, path);
+      else if (Array.isArray(payload)) assetField = payload.slice();
       else assetField = { ...payload };
 
       if (Array.isArray(assetField)) {
@@ -90,9 +92,15 @@ class CASL {
           );
           return pick(member, allowedFields);
         });
-        return (await Promise.all(assetField)).filter(
+
+        assetField = (await Promise.all(assetField)).filter(
           obj => Object.entries(obj).length !== 0
         );
+
+        if (path !== undefined) this.setNestedValue(payload, path, assetField);
+        else payload = assetField;
+
+        return payload;
       } else {
         const allowedFields = await this.getAllowedFields(
           r,
@@ -100,11 +108,12 @@ class CASL {
           new assetClass(assetField)
         );
 
-        console.log(allowedFields);
+        assetField = pick(assetField, allowedFields);
 
-        console.log(pick(assetField, allowedFields));
+        if (path !== undefined) this.setNestedValue(payload, path, assetField);
+        else payload = assetField;
 
-        return pick(assetField, allowedFields);
+        return payload;
       }
     };
   }
@@ -118,14 +127,13 @@ class CASL {
       if (!asset)
         asset = url[1].toUpperCase() + url.substring(2, url.indexOf("/", 1));
 
-      if (typeof r.body === "object") {
-        const allowedFields = await this.getAllowedFields(
-          r,
-          userField,
-          new this.assetClasses[asset](r.body)
-        );
-        r.body = pick(r.body, allowedFields);
-      }
+      const allowedFields = await this.getAllowedFields(
+        r,
+        userField,
+        new this.assetClasses[asset](r.body)
+      );
+
+      r.body = pick(r.body, allowedFields);
     };
   }
 
@@ -136,8 +144,7 @@ class CASL {
 
     const user = await r.jwtVerify();
 
-    const assetName =
-      typeof asset === "string" ? asset : asset.constructor.modelName;
+    const assetName = asset.constructor.modelName;
 
     const ability = this.createAbilities(
       assetName,
@@ -161,8 +168,10 @@ class CASL {
 
     $if = { ...$if };
 
-    if ($if) {
-      Object.keys($if).forEach(key => {
+    const keys = Object.keys($if);
+
+    if (keys.length !== 0) {
+      keys.forEach(key => {
         if (key[0] === "$") {
           $if[key.substring(1)] = this.getNestedValue(userInfo, $if[key]);
           delete $if[key];
@@ -203,15 +212,35 @@ class CASL {
       .split(".")
       .forEach(segment => (obj = obj !== undefined ? obj[segment] : undefined));
 
+    if (obj === undefined)
+      throw new Error(
+        this.verbose
+          ? `Inexistent nested value for path "${path}"`
+          : "Fatal Error"
+      );
+
     return obj;
+  }
+
+  // This method is called after getNestedValue so no type of undefined checking is required
+  setNestedValue(obj, path, val) {
+    path
+      .split(".")
+      .slice(0, -1)
+      .forEach(segment => (obj = obj[segment]));
+
+    obj[path.substring(path.lastIndexOf(".") + 1)] = val;
   }
 }
 
 async function caslConnector(
   fastify,
-  { assets, mongooseSchemas, denyByDefault = false }
+  { assets, mongooseSchemas, denyByDefault = false, verbose = false }
 ) {
-  fastify.decorate("casl", new CASL(mongooseSchemas, assets, denyByDefault));
+  fastify.decorate(
+    "casl",
+    new CASL(mongooseSchemas, assets, denyByDefault, verbose)
+  );
 }
 
 module.exports = fastifyPlugin(caslConnector);

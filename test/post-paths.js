@@ -30,7 +30,31 @@ const routes = async fastify => {
   fastify.get(
     "/",
     {
+      preHandler: fastify.casl.guardPath(),
       preSerialization: fastify.casl.sanitizeOutput()
+    },
+    async () => serverPosts
+  );
+
+  // Return Nested Array
+  fastify.get(
+    "/nested",
+    {
+      preSerialization: fastify.casl.sanitizeOutput("type", "posts.nested")
+    },
+    async () => ({
+      posts: { nested: serverPosts }
+    })
+  );
+
+  // Throw on serialization nest
+  fastify.get(
+    "/throw",
+    {
+      preSerialization: fastify.casl.sanitizeOutput(
+        "type",
+        "posts.nested.inner"
+      )
     },
     async () => serverPosts
   );
@@ -39,7 +63,7 @@ const routes = async fastify => {
   fastify.post(
     "/",
     {
-      preHandler: fastify.casl.guardPath()
+      preHandler: fastify.casl.guardPath("type", "Post")
     },
     async r => {
       serverPosts.push(r.body);
@@ -51,7 +75,7 @@ const routes = async fastify => {
   fastify.get(
     "/:id",
     {
-      preHandler: fastify.casl.guardPath("user_type.is"),
+      preSerialization: fastify.casl.sanitizeOutput("user_type.is"),
       schema: idParamSchema
     },
     async r => serverPosts.find(post => post._id === r.params.id)
@@ -73,8 +97,10 @@ const routes = async fastify => {
       };
 
       return {
-        message: "Updated Sucessfully",
-        post: { nested: serverPosts[assetIndex] }
+        message: "Updated Successfully",
+        post: {
+          nested: serverPosts[assetIndex]
+        }
       };
     }
   );
