@@ -29,7 +29,7 @@ The configuration object structure can be found below:
 }
 ```
 
-The `mongooseSchemas` property accepts a [mongoose] instance to extract all the fields of a specific asset. The inclusion of a mongoose instance is optional, as the internal code of the library simply looks at the `mongooseSchemas[NAME_OF_ASSET].paths` property, but is provided to prevent schema repetition. For instance, the library pairs nicely with [fastify-mongoose-driver](https://github.com/alex-ppg/fastify-mongoose) as one can declare the plugin as follows:
+The `mongooseSchemas` property accepts a [fastify-mongoose-driver](https://github.com/alex-ppg/fastify-mongoose) instance to extract all the fields of a specific asset. The inclusion of the above library is optional, as the internal code of the library simply looks at the `mongooseSchemas[NAME_OF_ASSET].paths` property, but is provided to prevent schema repetition. For instance, this library pairs nicely with [fastify-mongoose-driver](https://github.com/alex-ppg/fastify-mongoose) as one can declare the plugin configuration as follows:
 
 ```javascript
 fastify.register(
@@ -46,6 +46,22 @@ fastify.register(
   require("fastify-casl"),
   parent => ({
     mongooseSchemas: parent.mongoose,
+    assets: ASSET_RULE_ARRAY
+  })
+);
+```
+
+Alternatively, if you do not want to pass in a mongoose instance you can simply specify a proper object conforming to the `mongooseSchemas[NAME_OF_ASSET].paths` lookup:
+
+```javascript
+fastify.register(
+  require("fastify-casl"),
+  parent => ({
+    mongooseSchemas: {
+      ASSET_NAME: {
+        paths: ["ALL_ASSET_PROPERTY_NAMES"]
+      }
+    },
     assets: ASSET_RULE_ARRAY
   })
 );
