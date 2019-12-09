@@ -1,27 +1,28 @@
 {
   "name": "fastify-casl",
   "version": "1.0.0",
-  "description": "A plugin to enforce ACL rules on fastify paths & mongoose-driver models",
+  "description": "A plugin to enforce ACL rules on fastify paths",
   "main": "index.js",
   "scripts": {
     "test": "tap test/*.test.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alex-ppg/fastify-casl.git"
+    "url": "git+https://github.com/Inlecom/fastify-casl.git"
   },
   "keywords": [
     "fastify",
     "acl",
     "casl",
+    "mongoose",
     "mongoose-driver"
   ],
-  "author": "Alex Papageorgiou",
+  "author": "Alex Papageorgiou (ILS)",
   "license": "GPL-3.0",
   "bugs": {
-    "url": "https://github.com/alex-ppg/fastify-casl/issues"
+    "url": "https://github.com/Inlecom/fastify-casl/issues"
   },
-  "homepage": "https://github.com/alex-ppg/fastify-casl#readme",
+  "homepage": "https://github.com/Inlecom/fastify-casl#readme",
   "dependencies": {
     "@casl/ability": "^3.2.0",
     "fastify-plugin": "^1.6.0",
