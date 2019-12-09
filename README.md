@@ -100,6 +100,8 @@ As an example, if we have an asset we call `"Post"` which only users with the `w
 }
 ```
 
+You can also specify the `$default` role permissions that will be applied to any role that does not match a `RULE_CONFIGURATION`. 
+
 The `RULE_CONFIGURATION` parameter can provide more fine-grained control with regards to the permissions a role has. It allows one to specify specific fields (`$fields` property) of an asset a role is allowed to conduct the operation as well as conditionals (`$if` property).
 
 The `$fields` property is pretty straightforward. If we wish to allow `editor` users to edit the content of `Post`s but only `writer`s to `create` and `update` them, we can write the following:
