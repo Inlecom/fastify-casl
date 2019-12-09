@@ -29,7 +29,7 @@ The configuration object structure can be found below:
 }
 ```
 
-The `mongooseSchemas` property accepts a [mongoose] instance to extract all the fields of a specific asset. The inclusion of a mongoose instance is optional, as the internal code of the library simply looks at the `mongooseSchemas[NAME_OF_ASSET].paths` property, but is provided to prevent schema repetition. For instance, the library pairs nicely with `fastify-mongoose-driver` as one can declare the plugin as follows:
+The `mongooseSchemas` property accepts a [mongoose] instance to extract all the fields of a specific asset. The inclusion of a mongoose instance is optional, as the internal code of the library simply looks at the `mongooseSchemas[NAME_OF_ASSET].paths` property, but is provided to prevent schema repetition. For instance, the library pairs nicely with [fastify-mongoose-driver](https://github.com/alex-ppg/fastify-mongoose) as one can declare the plugin as follows:
 
 ```javascript
 fastify.register(
